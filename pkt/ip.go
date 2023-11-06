@@ -3,6 +3,7 @@ package pkt
 import (
 	"errors"
 	"fmt"
+	"github.com/zenpk/udp2tcp-ideas/util"
 	"strconv"
 	"strings"
 )
@@ -23,15 +24,14 @@ type IpHeader struct {
 	FragmentOffset uint16
 	Ttl            uint8
 	Protocol       uint8
-	HeaderChecksum []byte
+	HeaderChecksum uint16
 	SrcIp          string
 	DstIp          string
 }
 
 func (i *Ip) ReadFromBytes(bytes []byte) error {
-	const headerSize = 20
-	if len(bytes) < headerSize {
-		return errors.New("bad IP bytes")
+	if len(bytes) < util.IpHeaderSize {
+		return errors.New("IP packet size should at least larger than the header size")
 	}
 	i.Header = IpHeader{
 		Version:        bytes[0] >> 4,
@@ -44,15 +44,24 @@ func (i *Ip) ReadFromBytes(bytes []byte) error {
 		FragmentOffset: uint16(bytes[6]&0x1f)<<8 + uint16(bytes[7]),
 		Ttl:            bytes[8],
 		Protocol:       bytes[9],
-		HeaderChecksum: bytes[10:12],
+		HeaderChecksum: uint16(bytes[10])<<8 + uint16(bytes[11]),
 		SrcIp:          fmt.Sprintf("%v.%v.%v.%v", bytes[12], bytes[13], bytes[14], bytes[15]),
 		DstIp:          fmt.Sprintf("%v.%v.%v.%v", bytes[16], bytes[17], bytes[18], bytes[19]),
 	}
-	i.Body = bytes[headerSize:]
+	i.Body = bytes[util.IpHeaderSize:]
 	return nil
 }
 
 func (i *Ip) WriteToBytes() ([]byte, error) {
+	res, err := i.WriteHeaderToBytes()
+	if err != nil {
+		return nil, err
+	}
+	res = append(res, i.Body...)
+	return res, nil
+}
+
+func (i *Ip) WriteHeaderToBytes() ([]byte, error) {
 	res := []byte{
 		i.Header.Version<<4 + i.Header.IHL,
 		i.Header.Dscp<<2 + i.Header.Ecn,
@@ -64,8 +73,8 @@ func (i *Ip) WriteToBytes() ([]byte, error) {
 		byte(i.Header.FragmentOffset & 0xff),
 		i.Header.Ttl,
 		i.Header.Protocol,
-		i.Header.HeaderChecksum[0],
-		i.Header.HeaderChecksum[1],
+		byte(i.Header.HeaderChecksum >> 8),
+		byte(i.Header.HeaderChecksum & 0xff),
 	}
 	srcIpBytes, err := i.ipToBytes(i.Header.SrcIp)
 	if err != nil {
@@ -77,7 +86,6 @@ func (i *Ip) WriteToBytes() ([]byte, error) {
 	}
 	res = append(res, srcIpBytes...)
 	res = append(res, dstIpBytes...)
-	res = append(res, i.Body...)
 	return res, nil
 }
 

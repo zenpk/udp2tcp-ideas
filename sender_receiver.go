@@ -63,7 +63,10 @@ func (r senderReceiver) handleSender(data []byte) error {
 	}
 	dynamicIp, dynamicPort := r.getDynamicIpPort(ipPacket, &udpPacket)
 	util.Log.Debug("dynamic IP: %v, dynamic port: %v\n", dynamicIp, dynamicPort)
-	tcpPacket := r.udpToFakeTcp(udpPacket)
+	tcpPacket, err := r.udpToFakeTcp(udpPacket)
+	if err != nil {
+		return err
+	}
 	encapsulatedIpPacket, err := r.encapsulateFakePacket(tcpPacket, ipPacket)
 	if err != nil {
 		return err
@@ -148,20 +151,20 @@ func (r senderReceiver) fakeTcpToUdp(tcpPacket pkt.Tcp, dynamicPort ...uint16) p
 
 // udpToFakeTcp converts the UDP packet to a fake TCP packet
 // the receiver should provide the dynamic port
-func (r senderReceiver) udpToFakeTcp(udpPacket pkt.Udp, dynamicPort ...uint16) pkt.Tcp {
+func (r senderReceiver) udpToFakeTcp(udpPacket pkt.Udp, dynamicPort ...uint16) (pkt.Tcp, error) {
 	var dstPort uint16
 	if len(dynamicPort) > 0 { // receiver, send back to the sender TUN device
 		dstPort = dynamicPort[0]
 	} else {
 		dstPort = r.dstPort // sender, send to the receiver TUN device
 	}
-	return pkt.Tcp{
+	tcpPacket := pkt.Tcp{
 		Header: pkt.TcpHeader{
 			SrcPort:       udpPacket.Header.SrcPort,
 			DstPort:       dstPort,
 			SeqNum:        uint32(udpPacket.Header.Length), // temp
 			AckNum:        0,
-			Offset:        0,
+			Offset:        5, // 20 bytes header / 4 bytes per word
 			Reserved:      0,
 			Cwr:           false,
 			Ece:           false,
@@ -171,51 +174,59 @@ func (r senderReceiver) udpToFakeTcp(udpPacket pkt.Udp, dynamicPort ...uint16) p
 			Rst:           false,
 			Syn:           false,
 			Fin:           false,
-			WindowSize:    0,
-			Checksum:      udpPacket.Header.Checksum,
+			WindowSize:    math.MaxUint16,
+			Checksum:      0, // will be calculated when encapsulated into IP packet
 			UrgentPointer: 0,
 		},
 		Body: udpPacket.Body,
 	}
+	return tcpPacket, nil
 }
 
 // encapsulateUdpPacket encapsulates the UDP packet into the IP packet
 // the sender should provide the dynamic IP
 func (r senderReceiver) encapsulateUdpPacket(udpPacket pkt.Udp, ipPacket pkt.Ip, dynamicIp ...string) (pkt.Ip, error) {
-	udpBytes, err := udpPacket.WriteToBytes()
-	if err != nil {
-		return pkt.Ip{}, err
-	}
+	udpBytes := udpPacket.WriteToBytes()
 	ipPacket.Body = udpBytes
 	ipPacket.Header.Protocol = 17 // change protocol to UDP
-	if len(dynamicIp) > 0 {       // sender, send back to the source application
+	ipPacket.Header.SrcIp = ipPacket.Header.DstIp
+	if len(dynamicIp) > 0 { // sender, send back to the source application
 		ipPacket.Header.DstIp = dynamicIp[0]
 	} else { // receiver, send to the target application
 		ipPacket.Header.DstIp = r.dstIp
 	}
-	// TODO checksum
+	ipPacket.Header.TotalLength -= 12 // TCP header is 12 bytes more than UDP
+	ipPacket.Header.HeaderChecksum = 0
+	//ipHeaderBytes, err := ipPacket.WriteHeaderToBytes()
+	//if err != nil {
+	//	return pkt.Ip{}, err
+	//}
+
 	// TODO edge case
-	ipPacket.Header.TotalLength -= 8 // TCP header is 8 bytes more than UDP
 	return ipPacket, nil
 }
 
 // encapsulateFakePacket encapsulates the fake TCP packet into the IP packet
 // the receiver should provide the dynamic IP
 func (r senderReceiver) encapsulateFakePacket(tcpPacket pkt.Tcp, ipPacket pkt.Ip, dynamicIp ...string) (pkt.Ip, error) {
-	tcpBytes, err := tcpPacket.WriteToBytes()
-	if err != nil {
-		return pkt.Ip{}, err
-	}
-	ipPacket.Body = tcpBytes
 	ipPacket.Header.Protocol = 6 // change protocol to TCP
-	if len(dynamicIp) > 0 {      // receiver, send back to the sender TUN device
+	ipPacket.Header.SrcIp = ipPacket.Header.DstIp
+	if len(dynamicIp) > 0 { // receiver, send back to the sender TUN device
 		ipPacket.Header.DstIp = dynamicIp[0]
 	} else { // sender, send to the receiver TUN device
 		ipPacket.Header.DstIp = r.dstIp
 	}
-	// TODO checksum
+	ipPacket.Header.TotalLength += 12 // TCP header is 12 bytes more than UDP
+	ipPacket.Header.HeaderChecksum = 0
+	ipHeaderBytes, err := ipPacket.WriteHeaderToBytes()
+	if err != nil {
+		return pkt.Ip{}, err
+	}
+	tcpHeaderBytes := tcpPacket.WriteHeaderToBytes()
+	tcpPacket.Header.Checksum = util.TcpChecksum(ipHeaderBytes, tcpHeaderBytes, tcpPacket.Body)
+	ipPacket.Body = tcpPacket.WriteToBytes()
+	// TODO IP checksum
 	// TODO edge case
-	ipPacket.Header.TotalLength += 8 // TCP header is 8 bytes more than UDP
 	return ipPacket, nil
 }
 
@@ -238,14 +249,14 @@ func (r senderReceiver) sendUdp(packet pkt.Udp) error {
 	return nil
 }
 
-// sendRemainder when faking UDP to TCP packet, an additional 8 bytes of header will be added
+// sendRemainder when faking UDP to TCP packet, an additional 12 bytes of header will be added
 // thus may cause a body overflow. The packet will be sent as two packets.
 // This should be a rare edge case.
 func (r senderReceiver) sendRemainder(header pkt.IpHeader, remainder []byte) error {
 	// TODO
 	util.Log.Warn("WARN: remainder happened")
-	if len(remainder) > 1 {
-		util.Log.Warn("ERROR: remainder shouldn't be larger than 8 bits\n")
+	if len(remainder) > 12 {
+		util.Log.Warn("ERROR: remainder shouldn't be larger than 12 bytes\n")
 		util.Log.Debug("    header: %v\n    remainder: %v\n", header, remainder)
 		return nil
 	}

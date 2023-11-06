@@ -1,6 +1,9 @@
 package pkt
 
-import "errors"
+import (
+	"errors"
+	"github.com/zenpk/udp2tcp-ideas/util"
+)
 
 type Udp struct {
 	Header UdpHeader
@@ -11,37 +14,40 @@ type UdpHeader struct {
 	SrcPort  uint16
 	DstPort  uint16
 	Length   uint16
-	Checksum []byte
+	Checksum uint16
 }
 
 func (u *Udp) ReadFromBytes(bytes []byte) error {
-	const headerSize = 8
-	if len(bytes) < headerSize {
-		return errors.New("bad UDP bytes")
+	if len(bytes) < util.UdpHeaderSize {
+		return errors.New("UDP packet size should at least larger than the header size")
 	}
 	u.Header = UdpHeader{
 		SrcPort:  uint16(bytes[0])<<8 + uint16(bytes[1]),
 		DstPort:  uint16(bytes[2])<<8 + uint16(bytes[3]),
 		Length:   uint16(bytes[4])<<8 + uint16(bytes[5]),
-		Checksum: bytes[6:8],
+		Checksum: uint16(bytes[6])<<8 + uint16(bytes[7]),
 	}
-	u.Body = bytes[headerSize:]
+	u.Body = bytes[util.UdpHeaderSize:]
 	return nil
 }
 
-func (u *Udp) WriteToBytes() ([]byte, error) {
-	res := []byte{
+func (u *Udp) WriteToBytes() []byte {
+	res := u.WriteHeaderToBytes()
+	res = append(res, u.Body...)
+	return res
+}
+
+func (u *Udp) WriteHeaderToBytes() []byte {
+	return []byte{
 		byte(u.Header.SrcPort >> 8),
 		byte(u.Header.SrcPort & 0xff),
 		byte(u.Header.DstPort >> 8),
 		byte(u.Header.DstPort & 0xff),
 		byte(u.Header.Length >> 8),
 		byte(u.Header.Length & 0xff),
-		u.Header.Checksum[0],
-		u.Header.Checksum[1],
+		byte(u.Header.Checksum >> 8),
+		byte(u.Header.Checksum & 0xff),
 	}
-	res = append(res, u.Body...)
-	return res, nil
 }
 
 func (u *Udp) GetSrcPort() uint16 {

@@ -1,6 +1,9 @@
 package pkt
 
-import "errors"
+import (
+	"errors"
+	"github.com/zenpk/udp2tcp-ideas/util"
+)
 
 type Tcp struct {
 	Header TcpHeader
@@ -23,14 +26,13 @@ type TcpHeader struct {
 	Syn           bool
 	Fin           bool
 	WindowSize    uint16
-	Checksum      []byte
+	Checksum      uint16
 	UrgentPointer uint16
 }
 
 func (t *Tcp) ReadFromBytes(bytes []byte) error {
-	const headerSize = 20
-	if len(bytes) < headerSize {
-		return errors.New("bad TCP bytes")
+	if len(bytes) < util.TcpHeaderSize {
+		return errors.New("TCP packets size should at least larger than the header size")
 	}
 	t.Header = TcpHeader{
 		SrcPort:       uint16(bytes[0])<<8 + uint16(bytes[1]),
@@ -48,15 +50,21 @@ func (t *Tcp) ReadFromBytes(bytes []byte) error {
 		Syn:           bytes[13]&0x02 > 0,
 		Fin:           bytes[13]&0x01 > 0,
 		WindowSize:    uint16(bytes[14])<<8 + uint16(bytes[15]),
-		Checksum:      bytes[16:17],
+		Checksum:      uint16(bytes[16])<<8 + uint16(bytes[17]),
 		UrgentPointer: uint16(bytes[18])<<8 + uint16(bytes[19]),
 	}
-	t.Body = bytes[headerSize:]
+	t.Body = bytes[util.TcpHeaderSize:]
 	return nil
 }
 
-func (t *Tcp) WriteToBytes() ([]byte, error) {
-	res := []byte{
+func (t *Tcp) WriteToBytes() []byte {
+	res := t.WriteHeaderToBytes()
+	res = append(res, t.Body...)
+	return res
+}
+
+func (t *Tcp) WriteHeaderToBytes() []byte {
+	return []byte{
 		byte(t.Header.SrcPort >> 8),
 		byte(t.Header.SrcPort & 0xff),
 		byte(t.Header.DstPort >> 8),
@@ -73,14 +81,13 @@ func (t *Tcp) WriteToBytes() ([]byte, error) {
 		t.combineBools(),
 		byte(t.Header.WindowSize >> 8),
 		byte(t.Header.WindowSize & 0xff),
-		t.Header.Checksum[0],
-		t.Header.Checksum[1],
+		byte(t.Header.Checksum >> 8),
+		byte(t.Header.Checksum & 0xff),
 		byte(t.Header.UrgentPointer >> 8),
 		byte(t.Header.UrgentPointer & 0xff),
 	}
-	res = append(res, t.Body...)
-	return res, nil
 }
+
 func (t *Tcp) GetSrcPort() uint16 {
 	return t.Header.SrcPort
 }
