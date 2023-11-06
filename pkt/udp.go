@@ -32,13 +32,18 @@ func (u *Udp) ReadFromBytes(bytes []byte) error {
 func (u *Udp) WriteToBytes() ([]byte, error) {
 	res := []byte{
 		byte(u.Header.SrcPort >> 8),
-		byte(u.Header.SrcPort & 0x0f),
+		byte(u.Header.SrcPort & 0xff),
 		byte(u.Header.DstPort >> 8),
-		byte(u.Header.DstPort & 0x0f),
+		byte(u.Header.DstPort & 0xff),
 		byte(u.Header.Length >> 8),
-		byte(u.Header.Length & 0x0f),
+		byte(u.Header.Length & 0xff),
+		u.Header.Checksum[0],
+		u.Header.Checksum[1],
 	}
-	res = append(res, u.Header.Checksum...)
 	res = append(res, u.Body...)
 	return res, nil
+}
+
+func (u *Udp) GetSrcPort() uint16 {
+	return u.Header.SrcPort
 }

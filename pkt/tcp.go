@@ -58,25 +58,31 @@ func (t *Tcp) ReadFromBytes(bytes []byte) error {
 func (t *Tcp) WriteToBytes() ([]byte, error) {
 	res := []byte{
 		byte(t.Header.SrcPort >> 8),
-		byte(t.Header.SrcPort & 0x0f),
+		byte(t.Header.SrcPort & 0xff),
 		byte(t.Header.DstPort >> 8),
-		byte(t.Header.DstPort & 0x0f),
+		byte(t.Header.DstPort & 0xff),
 		byte(t.Header.SeqNum >> 24),
-		byte(t.Header.SeqNum >> 16 & 0x0f),
-		byte(t.Header.SeqNum >> 8 & 0x0f),
-		byte(t.Header.SeqNum & 0x0f),
+		byte(t.Header.SeqNum >> 16 & 0xff),
+		byte(t.Header.SeqNum >> 8 & 0xff),
+		byte(t.Header.SeqNum & 0xff),
 		byte(t.Header.AckNum >> 24),
-		byte(t.Header.AckNum >> 16 & 0x0f),
-		byte(t.Header.AckNum >> 8 & 0x0f),
-		byte(t.Header.AckNum & 0x0f),
-		t.Header.Offset,
-		t.Header.Reserved,
+		byte(t.Header.AckNum >> 16 & 0xff),
+		byte(t.Header.AckNum >> 8 & 0xff),
+		byte(t.Header.AckNum & 0xff),
+		t.Header.Offset<<4 + t.Header.Reserved,
 		t.combineBools(),
+		byte(t.Header.WindowSize >> 8),
+		byte(t.Header.WindowSize & 0xff),
+		t.Header.Checksum[0],
+		t.Header.Checksum[1],
+		byte(t.Header.UrgentPointer >> 8),
+		byte(t.Header.UrgentPointer & 0xff),
 	}
-	res = append(res, t.Header.Checksum...)
-	res = append(res, byte(t.Header.UrgentPointer>>8), byte(t.Header.UrgentPointer&0x0f))
 	res = append(res, t.Body...)
 	return res, nil
+}
+func (t *Tcp) GetSrcPort() uint16 {
+	return t.Header.SrcPort
 }
 
 func (t *Tcp) combineBools() byte {

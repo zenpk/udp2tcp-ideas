@@ -12,6 +12,7 @@ func CreateDarwin() *water.Interface {
 	if err != nil {
 		panic(err)
 	}
+	util.Log.Info("%s started\n", tun.Name())
 	return tun
 }
 func CreateLinux() *water.Interface {
@@ -20,6 +21,7 @@ func CreateLinux() *water.Interface {
 	if err != nil {
 		panic(err)
 	}
+	util.Log.Info("%s started\n", tun.Name())
 	return tun
 }
 
@@ -28,6 +30,7 @@ func CreateWindows() *water.Interface {
 	if err := exec.Command("netsh", "interface", "ip", "source=static", " addr=10.1.0.10", "mask=255.255.255.0 ", "gateway=none").Run(); err != nil {
 		panic(err)
 	}
+	util.Log.Info("%s started\n", tun.Name())
 	return tun
 }
 

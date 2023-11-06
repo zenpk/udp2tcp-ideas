@@ -7,12 +7,17 @@ type MyLog struct {
 }
 
 const (
+	LogLevelError = 0
 	LogLevelWarn  = 1
 	LogLevelInfo  = 2
 	LogLevelDebug = 3
 )
 
 var Log MyLog
+
+func (m MyLog) Error(format string, v ...any) {
+	m.log(LogLevelError, format, v...)
+}
 
 func (m MyLog) Warn(format string, v ...any) {
 	m.log(LogLevelWarn, format, v...)

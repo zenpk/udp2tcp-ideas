@@ -4,7 +4,7 @@ const (
 	PlatformLinux   = "linux"
 	PlatformDarwin  = "darwin"
 	PlatformWindows = "windows"
-	ModeListener    = "listener"
+	ModeReceiver    = "receiver"
 	ModeSender      = "sender"
 	ModeTester      = "tester"
 	TunInnerIp      = "10.1.0.10"
