@@ -218,12 +218,11 @@ func (r senderReceiver) encapsulateFakePacket(tcpPacket pkt.Tcp, ipPacket pkt.Ip
 	}
 	ipPacket.Header.TotalLength += 12 // TCP header is 12 bytes more than UDP
 	ipPacket.Header.HeaderChecksum = 0
-	ipHeaderBytes, err := ipPacket.WriteHeaderToBytes()
+	var err error
+	tcpPacket.Header.Checksum, err = pkt.TcpChecksum(ipPacket, tcpPacket)
 	if err != nil {
 		return pkt.Ip{}, err
 	}
-	tcpHeaderBytes := tcpPacket.WriteHeaderToBytes()
-	tcpPacket.Header.Checksum = util.TcpChecksum(ipHeaderBytes, tcpHeaderBytes, tcpPacket.Body)
 	ipPacket.Body = tcpPacket.WriteToBytes()
 	// TODO IP checksum
 	// TODO edge case

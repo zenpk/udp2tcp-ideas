@@ -3,6 +3,7 @@ package tun
 import (
 	"github.com/labulakalia/water"
 	"github.com/zenpk/udp2tcp-ideas/util"
+	"log"
 	"os/exec"
 )
 
@@ -26,12 +27,14 @@ func CreateLinux() *water.Interface {
 }
 
 func CreateWindows() *water.Interface {
-	tun := createTun()
-	if err := exec.Command("netsh", "interface", "ip", "source=static", " addr=10.1.0.10", "mask=255.255.255.0 ", "gateway=none").Run(); err != nil {
-		panic(err)
-	}
-	util.Log.Info("%s started\n", tun.Name())
-	return tun
+	log.Fatalln("not implemented")
+	return nil
+	//tun := createTun()
+	//if err := exec.Command("netsh", "interface", "ip", "set", "address", fmt.Sprintf("name=%s", tun.Name()), "source=static", "addr=10.1.0.10", "mask=255.255.255.0", "gateway=none").Run(); err != nil {
+	//	panic(err)
+	//}
+	//util.Log.Info("%s started\n", tun.Name())
+	//return tun
 }
 
 func createTun() *water.Interface {
