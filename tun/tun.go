@@ -1,6 +1,7 @@
 package tun
 
 import (
+	"fmt"
 	"github.com/labulakalia/water"
 	"github.com/zenpk/udp2tcp-ideas/util"
 	"log"
@@ -9,8 +10,7 @@ import (
 
 func CreateDarwin() *water.Interface {
 	tun := createTun()
-	err := exec.Command("sudo", "ifconfig", tun.Name(), util.TunInnerIp, util.TunOuterIp, "up").Run()
-	if err != nil {
+	if err := exec.Command("sudo", "ifconfig", tun.Name(), util.TunInnerIp, util.TunOuterIp, "up").Run(); err != nil {
 		panic(err)
 	}
 	util.Log.Info("%s started\n", tun.Name())
@@ -18,8 +18,10 @@ func CreateDarwin() *water.Interface {
 }
 func CreateLinux() *water.Interface {
 	tun := createTun()
-	err := exec.Command("sudo", "ifconfig", tun.Name(), util.TunInnerIp, util.TunOuterIp, "up").Run()
-	if err != nil {
+	if err := exec.Command("sudo", "ip", "addr", "add", fmt.Sprintf("%s/24", util.TunInnerIp), "peer", util.TunOuterIp, "dev", tun.Name()).Run(); err != nil {
+		panic(err)
+	}
+	if err := exec.Command("sudo", "ip", "link", "set", "dev", tun.Name(), "up").Run(); err != nil {
 		panic(err)
 	}
 	util.Log.Info("%s started\n", tun.Name())
