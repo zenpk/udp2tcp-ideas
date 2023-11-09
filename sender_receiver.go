@@ -226,7 +226,7 @@ func (r senderReceiver) encapsulateFakePacket(tcpPacket pkt.Tcp, ipPacket pkt.Ip
 	tcpHeaderBytes := tcpPacket.WriteHeaderToBytes()
 	tcpPacket.Header.Checksum = pkt.TcpChecksum(ipHeaderBytes, tcpHeaderBytes, tcpPacket.Body)
 	ipPacket.Body = tcpPacket.WriteToBytes()
-	// TODO IP checksum
+
 	// TODO edge case
 	return ipPacket, nil
 }

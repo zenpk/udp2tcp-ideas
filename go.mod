@@ -2,10 +2,7 @@ module github.com/zenpk/udp2tcp-ideas
 
 go 1.20
 
-require (
-	github.com/google/gopacket v1.1.19
-	github.com/labulakalia/water v0.0.3
-)
+require github.com/labulakalia/water v0.0.3
 
 require (
 	golang.org/x/sys v0.13.0 // indirect
